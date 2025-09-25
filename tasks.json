@@ -1,0 +1,35 @@
+[
+  {
+    "id": 1,
+    "title": "Add X270 keyboard",
+    "description": "replacement of keyboard",
+    "status": "done",
+    "priority": "high",
+    "created_at": "2025-09-25T15:21:35.329153",
+    "due_date": "20250925",
+    "duration_seconds": 1800,
+    "remaining_seconds": 0
+  },
+  {
+    "id": 2,
+    "title": "battery assesment",
+    "description": "battery assessment for ms lecel",
+    "status": "done",
+    "priority": "medium",
+    "created_at": "2025-09-25T15:45:31.498892",
+    "due_date": "20250925",
+    "duration_seconds": 900,
+    "remaining_seconds": 0
+  },
+  {
+    "id": 3,
+    "title": "mobo replacement",
+    "description": "mobo replacement",
+    "status": "done",
+    "priority": "medium",
+    "created_at": "2025-09-25T15:46:08.317254",
+    "due_date": null,
+    "duration_seconds": 3600,
+    "remaining_seconds": 0
+  }
+]
