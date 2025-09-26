@@ -213,22 +213,19 @@ class TodoApp:
         del_btn = ttk.Button(btn_frame, text="Delete", command=lambda t=task: self._delete_task(t))
         del_btn.grid(row=0, column=2, padx=4, pady=2)
 
-        # timer controls and label
+        # timer label only - no controls needed since timer starts automatically
         timer_frame = ttk.Frame(btn_frame)
         timer_frame.grid(row=1, column=0, columnspan=3, pady=(6,0))
 
-        # remaining time label
-        rem = task.remaining_seconds if task.remaining_seconds is not None else task.duration_seconds
-        rem_lbl = ttk.Label(timer_frame, text=format_duration(rem))
-        rem_lbl.grid(row=0, column=0, padx=(0,6))
-        self.timer_labels[task.id] = rem_lbl
+        # elapsed time label
+        elapsed = task.remaining_seconds if task.remaining_seconds is not None else 0
+        elapsed_lbl = ttk.Label(timer_frame, text=f"Time: {format_duration(elapsed)}")
+        elapsed_lbl.grid(row=0, column=0, padx=(0,6))
+        self.timer_labels[task.id] = elapsed_lbl
 
-        # start/pause/reset
-        start_text = "Start" if task.id not in self.timers else "Pause"
-        start_btn = ttk.Button(timer_frame, text="Start", command=lambda t=task: self._toggle_timer(t))
-        start_btn.grid(row=0, column=1, padx=4)
-        reset_btn = ttk.Button(timer_frame, text="Reset", command=lambda t=task: self._reset_timer(t))
-        reset_btn.grid(row=0, column=2, padx=4)
+        # Start timer automatically if not running and task is not done
+        if task.id not in self.timers and task.status != "done":
+            self._start_timer(task)
 
     # ---------- CRUD actions ----------
     def _open_add_window(self):
@@ -282,23 +279,6 @@ class TodoApp:
         due_entry = ttk.Entry(form_row, textvariable=due_var)
         due_entry.grid(row=1, column=1, padx=(6,12), sticky="w")
 
-        # Duration inputs (hours, minutes, seconds)
-        dur_frame = ttk.Frame(body)
-        dur_frame.pack(fill="x", pady=(12,0))
-        ttk.Label(dur_frame, text="Estimated Duration", font=("Segoe UI", 10, "bold")).grid(row=0, column=0, columnspan=3, sticky="w")
-        hrs_var = tk.IntVar(value=(task.duration_seconds // 3600) if task else 0)
-        mins_var = tk.IntVar(value=((task.duration_seconds % 3600) // 60) if task else 30)
-        secs_var = tk.IntVar(value=(task.duration_seconds % 60) if task else 0)
-        ttk.Label(dur_frame, text="Hrs").grid(row=1, column=0, sticky="w")
-        ttk.Label(dur_frame, text="Mins").grid(row=1, column=1, sticky="w")
-        ttk.Label(dur_frame, text="Secs").grid(row=1, column=2, sticky="w")
-        hrs_spin = ttk.Spinbox(dur_frame, from_=0, to=99, textvariable=hrs_var, width=5)
-        mins_spin = ttk.Spinbox(dur_frame, from_=0, to=59, textvariable=mins_var, width=5)
-        secs_spin = ttk.Spinbox(dur_frame, from_=0, to=59, textvariable=secs_var, width=5)
-        hrs_spin.grid(row=2, column=0, padx=(0,6))
-        mins_spin.grid(row=2, column=1, padx=(0,6))
-        secs_spin.grid(row=2, column=2, padx=(0,6))
-
         # action buttons
         btn_frame = ttk.Frame(body)
         btn_frame.pack(fill="x", pady=(18,0))
@@ -315,29 +295,21 @@ class TodoApp:
             description = desc_text.get("1.0", "end").strip()
             prio = prio_var.get()
             due = due_var.get().strip() or None
-            try:
-                hrs = int(hrs_var.get())
-                mins = int(mins_var.get())
-                secs = int(secs_var.get())
-            except Exception:
-                messagebox.showwarning("Validation error", "Invalid duration values.")
-                return
-            # compute total seconds carefully (digit-by-digit style)
-            total_seconds = (hrs * 3600) + (mins * 60) + secs
 
             if task is None:
                 # add new
                 new_id = storage.get_next_id(self.tasks)
+                start_time = datetime.now()
                 new_task = Task(
                     id=new_id,
                     title=title_text,
                     description=description,
                     status="pending",
                     priority=prio,
-                    created_at=datetime.now().isoformat(),
+                    created_at=start_time.isoformat(),
                     due_date=due,
-                    duration_seconds=total_seconds,
-                    remaining_seconds=total_seconds,
+                    duration_seconds=0,  # Duration will be counted up automatically
+                    remaining_seconds=0,  # Will be used to track elapsed time
                 )
                 self.tasks.append(new_task)
                 logging.info(f"Added task {new_task.id}: {new_task.title}")
@@ -347,10 +319,7 @@ class TodoApp:
                 task.description = description
                 task.priority = prio
                 task.due_date = due
-                task.duration_seconds = total_seconds
-                # if task is done, keep it done; otherwise update remaining (reset)
-                if task.status != "done":
-                    task.remaining_seconds = total_seconds
+                # Keep the existing elapsed time (remaining_seconds) when editing
                 logging.info(f"Updated task {task.id}")
 
             storage.save_tasks(TASKS_PATH, self.tasks)
@@ -404,26 +373,19 @@ class TodoApp:
 
     def _start_timer(self, task: Task):
         def tick():
-            # careful subtraction
+            # increment elapsed time
             for t in self.tasks:
                 if t.id == task.id:
-                    t.remaining_seconds = int(max(0, t.remaining_seconds - 1))
+                    t.remaining_seconds = int(t.remaining_seconds + 1)
                     break
             # update label
             lbl = self.timer_labels.get(task.id)
             if lbl:
-                lbl.config(text=format_duration(task.remaining_seconds))
-            if task.remaining_seconds <= 0:
-                # timer ended
-                messagebox.showinfo("Timer finished", f"Task '{task.title}' timer finished — marking done.")
-                task.status = "done"
-                storage.save_tasks(TASKS_PATH, self.tasks)
-                self._stop_timer(task.id)
-                self._render_tasks()
-                return
-            # schedule next tick
-            after_id = self.root.after(1000, tick)
-            self.timers[task.id] = after_id
+                lbl.config(text=f"Time: {format_duration(task.remaining_seconds)}")
+            # schedule next tick if task is not done
+            if task.status != "done":
+                after_id = self.root.after(1000, tick)
+                self.timers[task.id] = after_id
 
         # start first tick
         after_id = self.root.after(1000, tick)
