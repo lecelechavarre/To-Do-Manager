@@ -1,4 +1,4 @@
-# Task Manager                  
+# Task Manager                   
 Python • Tkinter • JSON       
       
 A single-user, desktop-based task management application built with Python and Tkinter.  
